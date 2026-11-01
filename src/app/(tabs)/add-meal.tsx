@@ -1,5 +1,8 @@
+import Screen from "@/components/Screen";
 import { addMeal } from "@/storage/meals";
-import { colors, globalStyles } from "../styles/global";
+import { colors, globalStyles } from "@/styles/global";
+import { parseAmount } from "@/utils/macros";
+import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -10,7 +13,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import * as Haptics from "expo-haptics";
 
 export default function AddMealScreen() {
   const [name, setName] = useState("");
@@ -20,17 +22,31 @@ export default function AddMealScreen() {
   const [fat, setFat] = useState("");
 
   const handleAddMeal = async () => {
-    if (!name || !calories) {
-      Alert.alert("Error", "Please enter a meal name and calories.");
+    const parsedCalories = parseAmount(calories);
+    // Optional fields: empty means 0, anything else must be a valid number.
+    const parsedMacros = [protein, carbs, fat].map((value) =>
+      value.trim() === "" ? 0 : parseAmount(value),
+    );
+
+    if (!name.trim() || parsedCalories === null) {
+      Alert.alert(
+        "Error",
+        "Please enter a meal name and a valid calorie amount.",
+      );
+      return;
+    }
+    if (parsedMacros.includes(null)) {
+      Alert.alert("Error", "Protein, carbs and fat must be numbers.");
       return;
     }
 
+    const [parsedProtein, parsedCarbs, parsedFat] = parsedMacros as number[];
     await addMeal({
-      name,
-      calories: Number(calories),
-      protein: Number(protein) || 0,
-      carbs: Number(carbs) || 0,
-      fat: Number(fat) || 0,
+      name: name.trim(),
+      calories: parsedCalories,
+      protein: parsedProtein,
+      carbs: parsedCarbs,
+      fat: parsedFat,
     });
 
     setName("");
@@ -39,20 +55,19 @@ export default function AddMealScreen() {
     setCarbs("");
     setFat("");
 
-    Alert.alert("Success", "Meal added successfully!");
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    router.push("/");
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.navigate("/");
   };
 
   return (
-    <View style={globalStyles.container}>
+    <Screen>
       <Text style={globalStyles.title}>Add Meal</Text>
 
       <TextInput
         style={styles.input}
         placeholder="Meal name"
         placeholderTextColor={colors.textSecondary}
+        accessibilityLabel="Meal name"
         value={name}
         onChangeText={setName}
       />
@@ -61,7 +76,8 @@ export default function AddMealScreen() {
         style={styles.input}
         placeholder="Calories"
         placeholderTextColor={colors.textSecondary}
-        keyboardType="numeric"
+        accessibilityLabel="Calories"
+        keyboardType="decimal-pad"
         value={calories}
         onChangeText={setCalories}
       />
@@ -71,7 +87,8 @@ export default function AddMealScreen() {
           style={[styles.input, styles.rowInput]}
           placeholder="Protein (g)"
           placeholderTextColor={colors.textSecondary}
-          keyboardType="numeric"
+          accessibilityLabel="Protein in grams"
+          keyboardType="decimal-pad"
           value={protein}
           onChangeText={setProtein}
         />
@@ -79,7 +96,8 @@ export default function AddMealScreen() {
           style={[styles.input, styles.rowInput]}
           placeholder="Carbs (g)"
           placeholderTextColor={colors.textSecondary}
-          keyboardType="numeric"
+          accessibilityLabel="Carbs in grams"
+          keyboardType="decimal-pad"
           value={carbs}
           onChangeText={setCarbs}
         />
@@ -87,16 +105,21 @@ export default function AddMealScreen() {
           style={[styles.input, styles.rowInput]}
           placeholder="Fat (g)"
           placeholderTextColor={colors.textSecondary}
-          keyboardType="numeric"
+          accessibilityLabel="Fat in grams"
+          keyboardType="decimal-pad"
           value={fat}
           onChangeText={setFat}
         />
       </View>
 
-      <TouchableOpacity style={styles.button} onPress={handleAddMeal}>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={handleAddMeal}
+        accessibilityRole="button"
+      >
         <Text style={styles.buttonText}>Add Meal</Text>
       </TouchableOpacity>
-    </View>
+    </Screen>
   );
 }
 

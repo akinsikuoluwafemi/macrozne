@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "macrozone",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.femiii.macrozone",
@@ -33,7 +33,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#1a1a2e",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
@@ -53,6 +53,7 @@
         "projectId": "98f76083-1397-4dfa-b992-67fd88e8ac94"
       }
     },
-    "owner": "femiii"
+    "owner": "femiii",
+    "backgroundColor": "#1a1a2e"
   }
 }

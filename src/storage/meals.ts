@@ -14,7 +14,7 @@ const MEALS_KEY = "meals";
 
 export const getMeals = async (): Promise<Meal[]> => {
   const data = await AsyncStorage.getItem(MEALS_KEY);
-  return data ? JSON.parse(data) : [];
+  return data ? (JSON.parse(data) as Meal[]) : [];
 };
 
 export const addMeal = async (

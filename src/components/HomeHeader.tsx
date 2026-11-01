@@ -1,8 +1,8 @@
 import { StyleSheet, Text, View } from "react-native";
-import { colors, globalStyles } from "../app/styles/global";
+import { colors, globalStyles } from "@/styles/global";
 
 export default function HomeHeader() {
-  const currentDate = new Date().toLocaleDateString("en-US", {
+  const currentDate = new Date().toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
     day: "numeric",

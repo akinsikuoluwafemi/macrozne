@@ -1,28 +1,17 @@
 import { Alert, StyleSheet, Text, TouchableOpacity } from "react-native";
-import { deleteMeal } from "@/storage/meals";
-import { colors } from "../app/styles/global";
+import { deleteMeal, Meal } from "@/storage/meals";
+import { colors } from "@/styles/global";
 import * as Haptics from "expo-haptics";
 
 type MealItemProps = {
-  id: string;
-  name: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  onDelete: () => void;
+  meal: Meal;
+  onDelete: () => Promise<void>;
 };
 
-export default function MealItem({
-  id,
-  name,
-  calories,
-  protein,
-  carbs,
-  fat,
-  onDelete,
-}: MealItemProps) {
-  const handleLongPress = () => {
+export default function MealItem({ meal, onDelete }: MealItemProps) {
+  const { id, name, calories, protein, carbs, fat } = meal;
+
+  const confirmDelete = () => {
     Alert.alert("Delete Meal", `Are you sure you want to delete "${name}"?`, [
       { text: "Cancel", style: "cancel" },
       {
@@ -30,15 +19,25 @@ export default function MealItem({
         style: "destructive",
         onPress: async () => {
           await deleteMeal(id);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          onDelete();
+          void Haptics.notificationAsync(
+            Haptics.NotificationFeedbackType.Success,
+          );
+          await onDelete();
         },
       },
     ]);
   };
 
   return (
-    <TouchableOpacity style={styles.container} onLongPress={handleLongPress}>
+    <TouchableOpacity
+      style={styles.container}
+      onLongPress={confirmDelete}
+      accessibilityHint="Long press to delete"
+      accessibilityActions={[{ name: "delete", label: "Delete meal" }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "delete") confirmDelete();
+      }}
+    >
       <Text style={styles.name}>{name}</Text>
       <Text style={styles.macros}>
         {calories} cal • {protein}g P • {carbs}g C • {fat}g F

@@ -1,62 +1,71 @@
 import MealItem from "@/components/MealItem";
+import Screen from "@/components/Screen";
 import { clearAllMeals, getMeals, Meal } from "@/storage/meals";
-import { globalStyles } from "../styles/global";
+import { colors, globalStyles } from "@/styles/global";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export default function AllMealsScreen() {
   const [meals, setMeals] = useState<Meal[]>([]);
 
   const loadMeals = async () => {
-    const data = await getMeals();
-    setMeals(data);
+    setMeals(await getMeals());
   };
 
-  const handleClearAll = async () => {
-    await clearAllMeals();
-    loadMeals();
+  const handleClearAll = () => {
+    Alert.alert(
+      "Clear all meals?",
+      `This permanently deletes all ${meals.length} meals.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear All",
+          style: "destructive",
+          onPress: async () => {
+            await clearAllMeals();
+            await loadMeals();
+          },
+        },
+      ],
+    );
   };
 
   useFocusEffect(
     useCallback(() => {
-      loadMeals();
+      void loadMeals();
     }, []),
   );
 
   return (
-    <ScrollView style={globalStyles.container}>
+    <Screen>
       <View style={globalStyles.header}>
         <Text style={globalStyles.title}>All Meals</Text>
-        <TouchableOpacity onPress={handleClearAll}>
-          <Text style={styles.clearButton}>Clear All</Text>
-        </TouchableOpacity>
+        {meals.length > 0 && (
+          <TouchableOpacity onPress={handleClearAll} accessibilityRole="button">
+            <Text style={styles.clearButton}>Clear All</Text>
+          </TouchableOpacity>
+        )}
       </View>
-      <View style={{ marginTop: 30 }}>
+      <View style={styles.list}>
         {meals.length === 0 ? (
           <Text style={globalStyles.empty}>No meals logged yet.</Text>
         ) : (
           meals.map((meal) => (
-            <MealItem
-              key={meal.id}
-              id={meal.id}
-              name={meal.name}
-              calories={meal.calories}
-              protein={meal.protein}
-              carbs={meal.carbs}
-              fat={meal.fat}
-              onDelete={loadMeals}
-            />
+            <MealItem key={meal.id} meal={meal} onDelete={loadMeals} />
           ))
         )}
       </View>
-    </ScrollView>
+    </Screen>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   clearButton: {
-    color: "red",
+    color: colors.alert,
     fontSize: 16,
   },
-};
+  list: {
+    marginTop: 30,
+  },
+});

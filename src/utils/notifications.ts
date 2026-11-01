@@ -1,18 +1,18 @@
 import * as Notifications from "expo-notifications";
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
+  handleNotification: () =>
+    Promise.resolve({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    }),
 });
 
 export const requestPermissions = async (): Promise<boolean> => {
   const { status } = await Notifications.requestPermissionsAsync();
-  return status === "granted";
+  return status === Notifications.PermissionStatus.GRANTED;
 };
 
 export const scheduleMealReminders = async () => {

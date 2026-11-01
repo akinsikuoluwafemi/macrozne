@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
-import { StyleSheet, Switch, Text, View } from "react-native";
-import { colors } from "../app/styles/global";
+import { Alert, Linking, StyleSheet, Switch, Text, View } from "react-native";
+import { colors } from "@/styles/global";
 import {
   cancelMealReminders,
   requestPermissions,
@@ -18,13 +18,26 @@ export default function ReminderToggle() {
       const val = await AsyncStorage.getItem(REMINDERS_KEY);
       setEnabled(val === "true");
     };
-    load();
+    void load();
   }, []);
 
   const toggle = async (value: boolean) => {
     if (value) {
       const granted = await requestPermissions();
-      if (!granted) return;
+      if (!granted) {
+        Alert.alert(
+          "Notifications are off",
+          "Allow notifications for MacroZone in Settings to get meal reminders.",
+          [
+            { text: "Not now", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: () => void Linking.openSettings(),
+            },
+          ],
+        );
+        return;
+      }
       await scheduleMealReminders();
     } else {
       await cancelMealReminders();
@@ -39,6 +52,7 @@ export default function ReminderToggle() {
       <Switch
         value={enabled}
         onValueChange={toggle}
+        accessibilityLabel="Meal reminders"
         trackColor={{ false: colors.surface, true: colors.primary }}
       />
     </View>
