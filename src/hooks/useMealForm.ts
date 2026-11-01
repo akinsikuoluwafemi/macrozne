@@ -1,46 +1,68 @@
-import type { MealInput } from "@/storage/meals";
+import { saveMeal } from "@/actions/meals";
+import type { Meal } from "@/types/meal";
 import {
   emptyMealForm,
   type MealFormErrors,
   type MealFormValues,
-  validateMealForm,
 } from "@/utils/validation";
-import { useState } from "react";
+import { startTransition, useActionState, useRef } from "react";
+import { useMeals } from "./useMeals";
 
-// Shared state + validation for the add and edit forms.
-export function useMealForm(initialValues: MealFormValues = emptyMealForm) {
-  const [values, setValues] = useState(initialValues);
-  const [errors, setErrors] = useState<MealFormErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export type MealFormState = {
+  errors: MealFormErrors;
+  // Bumped on every successful save; used as a `key` to reset the inputs.
+  version: number;
+};
+
+type UseMealFormOptions = {
+  mealId?: string;
+  initialValues?: MealFormValues;
+  onSuccess?: (meals: Meal[]) => void;
+};
+
+// Form state without useState: inputs are uncontrolled (values live in a ref,
+// like a native <form>), and submitting runs a server action through
+// useActionState, which gives us the errors and pending flag.
+export function useMealForm({
+  mealId,
+  initialValues = emptyMealForm,
+  onSuccess,
+}: UseMealFormOptions = {}) {
+  const { syncMeals } = useMeals();
+  const values = useRef<MealFormValues>({ ...initialValues });
+
+  const [state, submitAction, isPending] = useActionState(
+    async (prev: MealFormState): Promise<MealFormState> => {
+      try {
+        const result = await saveMeal({ ...values.current }, mealId);
+        if (!result.ok) return { ...prev, errors: result.errors };
+
+        syncMeals(result.meals);
+        onSuccess?.(result.meals);
+        if (!mealId) values.current = { ...initialValues };
+        return { errors: {}, version: prev.version + 1 };
+      } catch {
+        return { ...prev, errors: { name: "Couldn't reach the server" } };
+      }
+    },
+    { errors: {}, version: 0 },
+  );
 
   const setField = (field: keyof MealFormValues) => (text: string) => {
-    setValues((current) => ({ ...current, [field]: text }));
-    // Clear a field's error as soon as the user edits it.
-    setErrors((current) => ({ ...current, [field]: undefined }));
+    values.current[field] = text;
   };
 
-  const reset = () => {
-    setValues(initialValues);
-    setErrors({});
+  const submit = () => {
+    if (isPending) return;
+    startTransition(() => submitAction());
   };
 
-  const handleSubmit =
-    (onValid: (data: MealInput) => Promise<void>) => async () => {
-      if (isSubmitting) return;
-
-      const result = validateMealForm(values);
-      if (!result.ok) {
-        setErrors(result.errors);
-        return;
-      }
-
-      setIsSubmitting(true);
-      try {
-        await onValid(result.data);
-      } finally {
-        setIsSubmitting(false);
-      }
-    };
-
-  return { values, errors, isSubmitting, setField, reset, handleSubmit };
+  return {
+    defaultValues: initialValues,
+    errors: state.errors,
+    version: state.version,
+    isPending,
+    setField,
+    submit,
+  };
 }

@@ -1,4 +1,4 @@
-import type { Meal } from "@/storage/meals";
+import type { Meal } from "@/types/meal";
 
 export type MacroTotals = {
   calories: number;

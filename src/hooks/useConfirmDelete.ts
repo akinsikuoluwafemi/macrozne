@@ -1,4 +1,4 @@
-import type { Meal } from "@/storage/meals";
+import type { Meal } from "@/types/meal";
 import * as Haptics from "expo-haptics";
 import { Alert } from "react-native";
 import { useMeals } from "./useMeals";
@@ -16,8 +16,9 @@ export function useConfirmDelete() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            await deleteMeal(meal.id);
+          onPress: () => {
+            // Optimistic: the row disappears now; the server confirms later.
+            deleteMeal(meal.id);
             void Haptics.notificationAsync(
               Haptics.NotificationFeedbackType.Success,
             );

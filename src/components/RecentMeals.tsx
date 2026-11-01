@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { Meal } from "@/storage/meals";
+import { Meal } from "@/types/meal";
 import { globalStyles } from "@/styles/global";
 import MealItem from "./MealItem";
 

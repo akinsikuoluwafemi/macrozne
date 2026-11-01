@@ -1,6 +1,6 @@
 import { useMealForm } from "@/hooks/useMealForm";
-import type { MealInput } from "@/storage/meals";
 import { colors } from "@/styles/global";
+import type { Meal } from "@/types/meal";
 import type { MealFormValues } from "@/utils/validation";
 import {
   StyleSheet,
@@ -12,38 +12,37 @@ import {
 } from "react-native";
 
 type MealFormProps = {
+  // Omit to create a new meal; pass to edit an existing one.
+  mealId?: string;
   initialValues?: MealFormValues;
   submitLabel: string;
-  // Return true to clear the form after a successful submit (add flow).
-  onSubmit: (data: MealInput) => Promise<boolean | void>;
+  onSuccess?: (meals: Meal[]) => void;
 };
 
-// The one form used for both creating and editing a meal.
+// The one form used for both creating and editing a meal. Inputs are
+// uncontrolled; the form is "submitted" to a server action.
 export default function MealForm({
+  mealId,
   initialValues,
   submitLabel,
-  onSubmit,
+  onSuccess,
 }: MealFormProps) {
-  const { values, errors, isSubmitting, setField, reset, handleSubmit } =
-    useMealForm(initialValues);
-
-  const submit = handleSubmit(async (data) => {
-    const shouldReset = await onSubmit(data);
-    if (shouldReset) reset();
-  });
+  const { defaultValues, errors, version, isPending, setField, submit } =
+    useMealForm({ mealId, initialValues, onSuccess });
 
   return (
-    <View>
+    // A new key after each successful save remounts the inputs, clearing them.
+    <View key={version}>
       <Field
         label="Meal name"
-        value={values.name}
+        defaultValue={defaultValues.name}
         onChangeText={setField("name")}
         error={errors.name}
       />
       <Field
         label="Calories"
         keyboardType="decimal-pad"
-        value={values.calories}
+        defaultValue={defaultValues.calories}
         onChangeText={setField("calories")}
         error={errors.calories}
       />
@@ -51,7 +50,7 @@ export default function MealForm({
         <Field
           label="Protein (g)"
           keyboardType="decimal-pad"
-          value={values.protein}
+          defaultValue={defaultValues.protein}
           onChangeText={setField("protein")}
           error={errors.protein}
           style={styles.rowField}
@@ -59,7 +58,7 @@ export default function MealForm({
         <Field
           label="Carbs (g)"
           keyboardType="decimal-pad"
-          value={values.carbs}
+          defaultValue={defaultValues.carbs}
           onChangeText={setField("carbs")}
           error={errors.carbs}
           style={styles.rowField}
@@ -67,7 +66,7 @@ export default function MealForm({
         <Field
           label="Fat (g)"
           keyboardType="decimal-pad"
-          value={values.fat}
+          defaultValue={defaultValues.fat}
           onChangeText={setField("fat")}
           error={errors.fat}
           style={styles.rowField}
@@ -75,13 +74,15 @@ export default function MealForm({
       </View>
 
       <TouchableOpacity
-        style={[styles.button, isSubmitting && styles.buttonDisabled]}
+        style={[styles.button, isPending && styles.buttonDisabled]}
         onPress={submit}
-        disabled={isSubmitting}
+        disabled={isPending}
         accessibilityRole="button"
-        accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
+        accessibilityState={{ disabled: isPending, busy: isPending }}
       >
-        <Text style={styles.buttonText}>{submitLabel}</Text>
+        <Text style={styles.buttonText}>
+          {isPending ? "Saving…" : submitLabel}
+        </Text>
       </TouchableOpacity>
     </View>
   );

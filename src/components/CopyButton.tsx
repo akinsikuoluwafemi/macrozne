@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { Alert, StyleSheet, Text, TouchableOpacity } from "react-native";
-import { Meal } from "@/storage/meals";
+import { Meal } from "@/types/meal";
 import { colors } from "@/styles/global";
 import { formatSummary } from "@/utils/macros";
 

@@ -1,5 +1,5 @@
 import { useConfirmDelete } from "@/hooks/useConfirmDelete";
-import type { Meal } from "@/storage/meals";
+import type { Meal } from "@/types/meal";
 import { colors } from "@/styles/global";
 import { router } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity } from "react-native";

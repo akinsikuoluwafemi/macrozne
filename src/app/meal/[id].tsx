@@ -1,7 +1,7 @@
 import MealForm from "@/components/MealForm";
 import Screen from "@/components/Screen";
 import { useConfirmDelete } from "@/hooks/useConfirmDelete";
-import { useMeal, useMeals } from "@/hooks/useMeals";
+import { useMeal } from "@/hooks/useMeals";
 import { colors, globalStyles } from "@/styles/global";
 import { toMealFormValues } from "@/utils/validation";
 import * as Haptics from "expo-haptics";
@@ -11,7 +11,6 @@ import { StyleSheet, Text, TouchableOpacity } from "react-native";
 export default function EditMealScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const meal = useMeal(id);
-  const { updateMeal } = useMeals();
   const { confirmDelete } = useConfirmDelete();
 
   if (!meal) {
@@ -25,10 +24,10 @@ export default function EditMealScreen() {
   return (
     <Screen hasHeader>
       <MealForm
+        mealId={meal.id}
         initialValues={toMealFormValues(meal)}
         submitLabel="Save Changes"
-        onSubmit={async (data) => {
-          await updateMeal(meal.id, data);
+        onSuccess={() => {
           void Haptics.notificationAsync(
             Haptics.NotificationFeedbackType.Success,
           );

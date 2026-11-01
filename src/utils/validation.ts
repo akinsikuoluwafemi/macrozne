@@ -1,4 +1,4 @@
-import type { Meal, MealInput } from "@/storage/meals";
+import type { Meal, MealInput } from "@/types/meal";
 import { parseAmount } from "./macros";
 
 // Form fields are always strings; they're only converted to numbers on submit.

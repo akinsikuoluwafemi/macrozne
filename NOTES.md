@@ -1,8 +1,14 @@
-# MacroZone: `feature/crud-hooks`
+# MacroZone: `feature/server-actions`
 
-Builds on `fix/review-issues`. Adds **full CRUD**: create, read, **update (new)** and delete.
-It also removes the duplicated data-loading and form logic by moving it into **custom hooks**
-and **one context provider**. Compare with `git diff fix/review-issues..feature/crud-hooks`.
+Builds on `feature/crud-hooks`. Same app, same screens, same hooks API. But:
+
+1. **The server owns the data.** Meals live on a server (Expo Router API routes), not in
+   AsyncStorage on the phone. Validation runs on the server too.
+2. **React 19 actions replace `useState`.** `useActionState`, `useOptimistic`, `use()` and
+   `Suspense` handle data, forms, pending and error states. There is no `useState`,
+   `useEffect` or `useFocusEffect` anywhere in `src/` (`grep -rn useState src` → nothing).
+
+Compare with `git diff feature/crud-hooks..feature/server-actions`.
 
 ## Branch map
 
@@ -10,92 +16,125 @@ and **one context provider**. Compare with `git diff fix/review-issues..feature/
 |---|---|---|
 | `main` | n/a | Baseline app, unreviewed. Its NOTES.md is the code review |
 | `fix/review-issues` | `main` | Review findings fixed, minimal changes |
-| `feature/crud-hooks` | `fix/review-issues` | Full CRUD + hooks + context (this branch) |
-| `feature/server-actions` | `feature/crud-hooks` | Data on the server via Expo Server Functions, React 19 actions, no `useState` |
+| `feature/crud-hooks` | `fix/review-issues` | Full CRUD + hooks + context |
+| `feature/server-actions` | `feature/crud-hooks` | Server-owned data + React 19 actions (this branch) |
 
-## The problem this branch solves
+## Running it
 
-On `fix/review-issues`, *every* screen did this:
-
-```tsx
-const [meals, setMeals] = useState<Meal[]>([]);
-const loadMeals = async () => setMeals(await getMeals());
-useFocusEffect(useCallback(() => { void loadMeals(); }, []));
+```bash
+npx expo start          # API routes are served by the dev server
+# press i for the iOS simulator
 ```
 
-That meant three copies of the same state, a re-read from disk on every tab switch, and an
-`onDelete` callback threaded through `RecentMeals → MealItem` just so the parent could reload.
-Adding *edit* would have added a fourth copy.
+In development, the app's relative `fetch("/api/meals")` goes to the dev server
+automatically. Data is written to `.data/meals.json` (git-ignored). Meals saved in
+AsyncStorage on earlier branches don't carry over.
 
-## Architecture now
+Try the API directly:
 
-```
-MealsProvider (context)           ← the one copy of meals[] in memory
-  ├─ useMeals()                   ← read meals, todaysMeals, todaysTotals + mutations
-  ├─ useMeal(id)                  ← one meal by id (edit screen)
-  ├─ useConfirmDelete()           ← confirm → delete → haptic, used by row + edit screen
-  ├─ useMealForm(initialValues)   ← field state, validation, isSubmitting (add + edit)
-  └─ useReminders()               ← notification permission + toggle state
+```bash
+curl -X POST localhost:8081/api/meals -H 'Content-Type: application/json' \
+  -d '{"name":"Oats","calories":"350","protein":"12,5","carbs":"60","fat":"7"}'
 ```
 
-| File | Role |
-|---|---|
-| `src/context/MealsContext.tsx` | Loads once on app start. Mutations write storage **then** update memory, so all screens re-render instantly |
-| `src/hooks/useMeals.ts` | Throws if used outside the provider: fail loudly, not with `undefined` |
-| `src/hooks/useMealForm.ts` | Strings in, validated `MealInput` out; per-field errors; blocks double-submit |
-| `src/utils/validation.ts` | **Pure** `validateMealForm()`: no React, unit-testable, reusable on a server (see next branch) |
-| `src/components/MealForm.tsx` | The single form for add *and* edit, with inline errors instead of `Alert`s |
-| `src/app/meal/[id].tsx` | **New** edit screen, presented as a modal; also has Delete |
-| `src/storage/meals.ts` | Added `updateMeal()` and a `MealInput` type |
+## Architecture
 
-### CRUD map
+```text
+Screen / component
+   │  calls
+   ▼
+hooks (useMeals, useMealForm, useConfirmDelete, useReminders)   ← unchanged API for screens
+   │  dispatch inside startTransition
+   ▼
+React 19 actions (useActionState + useOptimistic)               ← src/context, src/hooks
+   │  await
+   ▼
+client actions  src/actions/meals.ts                            ← getMeals, saveMeal, deleteMeal, clearAllMeals
+   │  fetch
+   ▼
+API routes      src/app/api/meals+api.ts, meals/[id]+api.ts     ← validate (shared pure fn) + persist
+   │
+   ▼
+src/server/mealsStore.ts → .data/meals.json                     ← swap for Postgres/SQLite in prod
+```
 
-| Operation | UI | Hook / function |
+### API
+
+| Method | Route | Success | Failure |
+|---|---|---|---|
+| GET | `/api/meals` | 200 `{ meals }` | n/a |
+| POST | `/api/meals` | 201 `{ meals }` | 422 `{ errors }` |
+| PUT | `/api/meals/:id` | 200 `{ meals }` | 422 `{ errors }`, 404 `{ errors }` |
+| DELETE | `/api/meals/:id` | 200 `{ meals }` | n/a |
+| DELETE | `/api/meals` | 200 `{ meals }` (clear all) | n/a |
+
+Every mutation returns the **full updated list**, so the client never computes "what the
+server probably has now"; it just takes the server's answer. Fine for a personal list;
+for large collections you'd return the changed record and patch a cache.
+
+## How each React 19 API is used
+
+| API | Where | Replaces |
 |---|---|---|
-| Create | Add Meal tab → `MealForm` | `useMeals().addMeal` |
-| Read | Home (today + recent 5), All Meals tab | `useMeals()` |
-| Update | Tap any meal → Edit modal → `MealForm` | `useMeals().updateMeal` |
-| Delete | Long-press row, VoiceOver action, or Edit → "Delete Meal" | `useConfirmDelete()` |
-| Delete all | All Meals → Clear All | `useConfirmDelete().confirmClearAll` |
+| `use(promise)` + `<Suspense>` | `MealsContext` initial load; `useReminders` preference | `useState` + `useEffect` + `isLoading` flag |
+| `useActionState(action, initial)` | Meals list: every change is an action returning the new list | `useState<Meal[]>` + setters |
+| `useActionState` | Form submit: returns `{ errors, version }`, gives `isPending` | `useState` for errors + `isSubmitting` |
+| `useOptimistic` | Delete / clear-all remove rows instantly; reminder switch flips instantly | Manual "optimistic then rollback" code |
+| `startTransition` | Wraps every `dispatch` (required outside `<form action>`) | n/a |
+| `useRef` + uncontrolled inputs | Form field values (`defaultValue` + `onChangeText`) | 5× `useState` for fields |
+| `key={version}` | Remounts inputs after a successful add → cleared form | `reset()` + setters |
 
-## Decisions worth explaining
+**Error rollback for free:** if a delete fails, `mealsAction` catches it and returns the
+*previous* list. When the transition ends, `useOptimistic` falls back to that real state, so
+the row reappears. No hand-written rollback.
 
-- **Context, not Redux/Zustand/React Query.** One small, local list with no server: context
-  is enough. I'd reach for React Query the moment meals come from an API (caching,
-  retries, background refetch), and Zustand if many unrelated parts of the tree subscribed
-  to slices of state (context re-renders every consumer on any change).
-- **Write-through, not optimistic.** Storage is written first, then state. If the write
-  fails, the UI never shows data that isn't saved. With a slow network API you'd flip this to
-  optimistic + rollback (see the next branch's `useOptimistic`).
-- **No `useCallback`/`useMemo` in the provider.** `app.json` enables the **React Compiler**,
-  which memoizes components and values automatically. Adding them manually is noise. Worth
-  saying in an interview: you know the tool and you know when it's *not* needed.
-- **Validation is a pure function outside the hook.** The hook manages *state*; the pure
-  function owns *rules*. Rules can then be tested without rendering, and shared with a server.
-- **Inline field errors > `Alert`.** Errors sit next to the field, `accessibilityLiveRegion`
-  announces them, the border turns red, and the user doesn't lose context.
-- **Visible labels above inputs.** Placeholders disappear once there's a value (the edit form
-  showed "10 / 10 / 25" with no clue which was which). Placeholder-as-label is a known a11y
-  anti-pattern.
-- **Edit is a route (`/meal/[id]`), not local modal state.** It's deep-linkable
-  (`macrozone://meal/123`), the back gesture works, and the screen handles "meal no longer
-  exists" for stale links.
-- **`useConfirmDelete` owns the confirm flow.** Two entry points (row and edit screen) now
-  share one implementation, so the copy, haptics and safety behave identically.
+## Why API routes and not `"use server"` Server Functions
 
-## Trade-offs / what I'd do next
+I first built this with Expo's **React Server Functions** (`"use server"`,
+`experiments.reactServerFunctions`, `react-server-dom-webpack`), which is what "server
+actions" literally means in React. It's still **beta** in Expo. On SDK 58.0.22 the dev server
+fails before running any app code:
 
-- `JSON.parse(...) as Meal[]` still has no runtime schema validation (Zod).
-- AsyncStorage rewrites the whole array on every change: fine for hundreds of meals, not
-  tens of thousands. Next step: SQLite (`expo-sqlite`) with an index on `createdAt`.
-- Lists use `.map()` inside a `ScrollView`. Switch All Meals to `FlatList`/`FlashList` once
-  lists get long (virtualisation).
-- Tests: `validation.ts` and `macros.ts` are pure and ready for Jest; hooks via
-  `@testing-library/react-native`'s `renderHook`.
+```text
+Metro error: Unknown named module:
+"…/metro-runtime/src/modules/empty-module.js?platform=web&env=react-server"
+  at ensureSSRReady (@expo/cli/…/createServerComponentsMiddleware.js:354)
+```
+
+I ruled out my code by removing every import from the server file (same error) and by
+upgrading to the latest SDK 58 patch (same error). The docs also list limits that matter
+here: no `<form>` integration on native, "production deployment is limited and not
+recommended yet", and EAS Update doesn't work with it.
+
+So the server boundary is **API routes**, which are stable in SDK 58. The *client* side is
+exactly what you'd write with Server Functions: components call async actions through
+`useActionState`. Switching later means replacing `src/actions/meals.ts` with a
+`"use server"` module that has the same function signatures; no screen or hook changes.
+
+That's a strong interview story: *evaluated the cutting-edge option, hit a real bug,
+contained the blast radius behind an interface, shipped the stable option.*
+
+## Trade-offs and production gaps
+
+- **Offline:** the app now needs the network. A real app would cache (React Query /
+  persisted store) and queue mutations for when it's back online.
+- **No auth / multi-user:** the store is one global list. Production needs auth and per-user
+  rows.
+- **JSON file store** isn't safe under concurrent writes; use a database.
+- **Native production builds** need `origin` set on the `expo-router` plugin and the server
+  deployed (EAS Hosting).
+- **Validation runs only on submit.** With uncontrolled inputs, errors clear on the next
+  submit, not as you type (that would need state again). A deliberate trade-off to show the
+  pattern.
+- `expo` / `expo-router` / `@expo/ui` were bumped to the latest SDK 58 patch on this branch
+  (`npx expo install --fix`).
 
 ## Interview angle
 
-"Why hooks?" is really "why separate *what* from *how*". Screens now read like a description
-of the UI; the hooks hide storage, validation and side effects. If the data source changes
-(AsyncStorage → API → server functions), only the provider changes, and the screens don't.
-The next branch proves this.
+- **"Where should validation live?"** Both sides. The client checks for fast feedback; the
+  server is the authority. Here one pure function (`validateMealForm`) is shared by both.
+- **"Optimistic UI: when not?"** Payments. At Mollie you would *not* optimistically show a
+  refund as completed. Deleting a meal is low-risk; moving money is not. Say this.
+- **"What does `useActionState` buy you over `useState`?"** It ties pending state, the
+  result and errors to the *action* rather than to scattered flags. It also serialises
+  dispatches, so double-taps can't race.
