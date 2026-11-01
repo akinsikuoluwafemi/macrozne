@@ -1,41 +1,33 @@
-import { Alert, StyleSheet, Text, TouchableOpacity } from "react-native";
-import { deleteMeal, Meal } from "@/storage/meals";
+import { useConfirmDelete } from "@/hooks/useConfirmDelete";
+import type { Meal } from "@/storage/meals";
 import { colors } from "@/styles/global";
-import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
+import { StyleSheet, Text, TouchableOpacity } from "react-native";
 
 type MealItemProps = {
   meal: Meal;
-  onDelete: () => Promise<void>;
 };
 
-export default function MealItem({ meal, onDelete }: MealItemProps) {
-  const { id, name, calories, protein, carbs, fat } = meal;
+export default function MealItem({ meal }: MealItemProps) {
+  const { confirmDelete } = useConfirmDelete();
+  const { name, calories, protein, carbs, fat } = meal;
 
-  const confirmDelete = () => {
-    Alert.alert("Delete Meal", `Are you sure you want to delete "${name}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          await deleteMeal(id);
-          void Haptics.notificationAsync(
-            Haptics.NotificationFeedbackType.Success,
-          );
-          await onDelete();
-        },
-      },
-    ]);
-  };
+  const openEditor = () => router.push(`/meal/${meal.id}`);
 
   return (
     <TouchableOpacity
       style={styles.container}
-      onLongPress={confirmDelete}
-      accessibilityHint="Long press to delete"
-      accessibilityActions={[{ name: "delete", label: "Delete meal" }]}
+      onPress={openEditor}
+      onLongPress={() => confirmDelete(meal)}
+      accessibilityRole="button"
+      accessibilityHint="Opens the meal to edit. Long press to delete."
+      accessibilityActions={[
+        { name: "activate", label: "Edit meal" },
+        { name: "delete", label: "Delete meal" },
+      ]}
       onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === "delete") confirmDelete();
+        if (event.nativeEvent.actionName === "activate") openEditor();
+        if (event.nativeEvent.actionName === "delete") confirmDelete(meal);
       }}
     >
       <Text style={styles.name}>{name}</Text>

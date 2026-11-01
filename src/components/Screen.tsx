@@ -5,11 +5,14 @@ import { globalStyles } from "@/styles/global";
 
 type ScreenProps = {
   children: ReactNode;
+  // Screens with a native header let iOS inset the content below the header;
+  // screens without one pad for the status bar / Dynamic Island themselves.
+  hasHeader?: boolean;
 };
 
 // Scrollable screen container that keeps content clear of the status bar,
 // notch and Dynamic Island on every device.
-export default function Screen({ children }: ScreenProps) {
+export default function Screen({ children, hasHeader = false }: ScreenProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -17,8 +20,9 @@ export default function Screen({ children }: ScreenProps) {
       style={globalStyles.container}
       contentContainerStyle={[
         globalStyles.content,
-        { paddingTop: insets.top + 16 },
+        { paddingTop: hasHeader ? 16 : insets.top + 16 },
       ]}
+      contentInsetAdjustmentBehavior={hasHeader ? "automatic" : "never"}
       keyboardShouldPersistTaps="handled"
     >
       {children}
